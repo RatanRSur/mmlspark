@@ -150,6 +150,16 @@ class CNTKModelSuite extends LinuxOnly with CNTKTestUtils with RoundTripTestBase
     }
   }
 
+  test("supports multi out by default") {
+    val model  = new CNTKModel().setModelLocation(session, modelPath)
+                                .setInputCol(inputCol)
+                                .setOutputNodeIndex(3)
+    model.write.overwrite().save(saveFile)
+    val modelLoaded = CNTKModel.load(saveFile)
+    val result      = modelLoaded.transform(images)
+    outputCols.map(colName => assert(result.columns.contains(colName)))
+  }
+
   override def afterAll(): Unit = {
     new File(saveFile).delete()
     super.afterAll()

@@ -20,6 +20,7 @@ import org.apache.spark.sql.types._
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.collection.JavaConversions._
 
 private object CNTKModelUtils extends java.io.Serializable {
 
@@ -80,18 +81,22 @@ private object CNTKModelUtils extends java.io.Serializable {
           inputDataMap.add(inputVar, inputVal)
 
           val outputDataMap = new UnorderedMapVariableValuePtr()
-          val outputVar     = model.getOutputs.get(0)
-          outputDataMap.add(outputVar, null)
+          val outputVars    = model.getOutputs
+          outputVars.map(outputDataMap.add(_, null))
 
           model.evaluate(inputDataMap, outputDataMap, device)
 
-          val outputFVV = new FloatVectorVector()
-          outputDataMap.getitem(outputVar).copyVariableValueToFloat(outputVar, outputFVV)
+          val outputFVVs = Array.fill(outputVars.size)(new FloatVectorVector())
+          (outputVars zip outputFVVs).map {
+            case (vari, vect) => outputDataMap.getitem(vari).copyVariableValueToFloat(vari, vect)
+          }
           assert(outputBuffer.isEmpty,
                  "The output row buffer should be empty before new elements are added.")
-          outputBuffer ++= toSeqSeq(outputFVV)
-            .dropRight(paddedRows)
-            .map(fs => Row(Vectors.dense(fs.map(_.toDouble).toArray)))
+          val outputSeqVecs = outputFVVs.map(fvv => toSeqSeq(fvv).dropRight(paddedRows)
+                                                                 .map(fv => Vectors.dense(fv.map(_.toDouble).toArray)))
+          val actualBatchSize = minibatchSize - paddedRows
+          val unzippedBatches = for (i <- 0 until actualBatchSize) yield outputSeqVecs.map(_.apply(i))
+          outputBuffer ++= unzippedBatches.map(Row.fromSeq(_))
         }
         val ret = Row.merge(inputBuffer.head, outputBuffer.head)
         inputBuffer.remove(0)
@@ -132,7 +137,7 @@ object CNTKModel extends ComplexParamsReadable[CNTKModel] {
 
 @InternalWrapper
 class CNTKModel(override val uid: String) extends Model[CNTKModel] with ComplexParamsWritable
-  with HasInputCol with HasOutputCol with Wrappable{
+  with HasInputCol with HasOutputCol with HasOutputCols with Wrappable{
 
   def this() = this(Identifiable.randomUID("CNTKModel"))
 
@@ -201,6 +206,13 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel] with ComplexP
   def getMiniBatchSize: Int                   = $(miniBatchSize)
   setDefault(miniBatchSize -> 10)
 
+  override def setOutputCol(value: String): this.type = super.setOutputCols(Array(value))
+
+  override def getOutputCol: String = {
+    if (getOutputCols.length == 1) getOutputCols.head
+    else throw new Exception("Must have one and only one outputCol set in order to getOutputCol")
+  }
+
   def transformSchema(schema: StructType): StructType = schema.add(getOutputCol, VectorType)
 
   override def copy(extra: ParamMap): this.type = defaultCopy(extra)
@@ -257,7 +269,9 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel] with ComplexP
                                     getMiniBatchSize,
                                     getInputNode,
                                     outputNode))
-    val output = spark.createDataFrame(rdd, df.schema.add(StructField(getOutputCol, VectorType)))
+    setDefault(outputCols -> model.getOutputs.map(_.getName).toArray) // defaults to all CNTK model outputs
+    val outputSchema = getOutputCols.foldLeft(df.schema)((schema, col) => schema.add(StructField(col, VectorType)))
+    val output = spark.createDataFrame(rdd, outputSchema)
 
     coersionOptionUDF match {
       case Some(_) => output.drop(coercedCol)
