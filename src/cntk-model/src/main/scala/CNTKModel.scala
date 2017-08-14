@@ -32,8 +32,10 @@ private object CNTKModelUtils extends java.io.Serializable {
     val device = DeviceDescriptor.useDefaultDevice
     val m = CNTKModel.loadModelFromBytes(broadcastModelBytes.value, device)
     val model = outputNode
-      .map { name => CNTKLib.AsComposite(Option(m.findByName(name)).getOrElse(
-              throw new IllegalArgumentException(s"Node $name does not exist"))) }
+      .map { names => if (names.length == 1) {
+        CNTKLib.AsComposite(Option(m.findByName(names.head)).getOrElse(
+              throw new IllegalArgumentException(s"Node $names does not exist")))
+      } else m}
       .getOrElse(m)
 
     val inputVar = model.getArguments.get(inputNode)
@@ -174,24 +176,24 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel] with ComplexP
   /** Index of the output node
     * @group param
     */
-  val outputNodeIndex: IntParam = new IntParam(this, "outputNodeIndex", "index of the output node")
+  val outputNodeIndices: IntArrayParam = new IntArrayParam(this, "outputNodeIndices", "index of the output node")
 
   /** @group setParam */
-  def setOutputNodeIndex(value: Int): this.type = set(outputNodeIndex, value)
+  def setOutputNodeIndices(value: Array[Int]): this.type = set(outputNodeIndices, value)
 
   /** @group getParam */
-  def getOutputNodeIndex: Int                   = $(outputNodeIndex)
+  def getOutputNodeIndices: Array[Int]                   = $(outputNodeIndices)
 
   /** Name of the output node
     * @group param
     */
-  val outputNodeName: Param[String] = new Param(this, "outputNodeName", "name of the output node")
+  val outputNodeNames: StringArrayParam = new StringArrayParam(this, "outputNodeNames", "name of the output node")
 
   /** @group setParam */
-  def setOutputNodeName(value: String): this.type = set(outputNodeName, value)
+  def setOutputNodeNames(value: Array[String]): this.type = set(outputNodeNames, value)
 
   /** @group getParam */
-  def getOutputNodeName: String                   = $(outputNodeName)
+  def getOutputNodeNames: Array[String]                   = $(outputNodeNames)
 
   /** Size of minibatches. Must be greater than 0; default is 10
     * @group param
@@ -232,15 +234,12 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel] with ComplexP
 
     val model = CNTKModel.loadModelFromBytes(getModel, device)
 
-    val setByName  = get(outputNodeName)
-    val setByIndex = get(outputNodeIndex)
-    if ((setByName.isDefined && setByIndex.isDefined) ||
-          (!setByName.isDefined && !setByIndex.isDefined))
-      throw new Exception("Must specify one and only one of outputNodeName or outputNodeIndex")
+    val setByName  = get(outputNodeNames)
+    val setByIndex = get(outputNodeIndices)
 
-    val outputNode: Option[String] =
+    val outputNode: Option[Array[String]] =
       if (setByName.isDefined) setByName
-      else                     setByIndex.map(i => model.getOutputs.get(i).getName)
+      else                     setByIndex.map(_.map(model.getOutputs.get(_).getName))
 
     val coersionOptionUDF = dataset.schema.fields(inputIndex).dataType match {
       case ArrayType(tp, _) =>
@@ -270,6 +269,8 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel] with ComplexP
                                     getInputNode,
                                     outputNode))
     setDefault(outputCols -> model.getOutputs.map(_.getName).toArray) // defaults to all CNTK model outputs
+    if (setByName.isDefined && setByIndex.isDefined)
+      throw new Exception("Must specify neither or only one of outputNodeName or outputNodeIndices")
     val outputSchema = getOutputCols.foldLeft(df.schema)((schema, col) => schema.add(StructField(col, VectorType)))
     val output = spark.createDataFrame(rdd, outputSchema)
 
