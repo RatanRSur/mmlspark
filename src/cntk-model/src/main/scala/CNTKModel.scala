@@ -101,8 +101,8 @@ private object CNTKModelUtils extends java.io.Serializable {
           (outputVars zip outputFVVs).foreach {
             case (vari, vect) => outputDataMap.getitem(vari).copyVariableValueToFloat(vari, vect)
           }
-          assert(outputBuffer.isEmpty,
-                 "The output row buffer should be empty before new elements are added.")
+          assume(outputBuffer.isEmpty,
+                 "The output row buffer was not empty when new elements were being added.")
           val outputSeqVecs = outputFVVs.map(fvv => toSeqSeq(fvv).dropRight(paddedRows)
                                                                  .map(fv => Vectors.dense(fv.map(_.toDouble).toArray)))
           val actualBatchSize = minibatchSize - paddedRows
