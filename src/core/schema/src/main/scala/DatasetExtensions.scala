@@ -6,6 +6,8 @@ package com.microsoft.ml.spark.schema
 import org.apache.spark.ml.linalg.{DenseVector, SparseVector}
 import org.apache.spark.sql.DataFrame
 import scala.collection.mutable
+import scala.annotation._
+import scala.collection.Set
 
 /** Contains methods for manipulating spark dataframes and datasets. */
 object DatasetExtensions {
@@ -48,14 +50,13 @@ object DatasetExtensions {
     *
     * @return The unused column name.
     */
-  def findUnusedColumnName(prefix: String)(columnNames: scala.collection.Set[String]): String = {
-    var counter = 2
-    var unusedColumnName = prefix
-    while (columnNames.contains(unusedColumnName)) {
-      unusedColumnName += "_" + counter
-      counter += 1
+  def findUnusedColumnName(prefix: String)(columnNames: Set[String]): String = {
+    @tailrec def loop(counter: Int): String = {
+      val unusedColumnName = s"${prefix}_$counter"
+      if (columnNames.contains(unusedColumnName)) loop(counter + 1)
+      else                                        unusedColumnName
     }
-    unusedColumnName
+    loop(2)
   }
 
 }
