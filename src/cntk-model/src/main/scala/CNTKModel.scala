@@ -259,14 +259,16 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel]
   def transform(dataset: Dataset[_]): DataFrame = {
     val spark        = dataset.sparkSession
     val sc           = spark.sparkContext
+
+    val device = DeviceDescriptor.useDefaultDevice
+    val model = CNTKModel.loadModelFromBytes(getModel, device)
+
+    setDefault(inputCols -> model.getArguments.map(_.getName).toArray)
     val inputIndices = getInputCols.map(dataset.columns.indexOf(_))
+
     val missingCols =
       inputIndices.zip(getInputCols).filter { case (ind, col) => ind == -1 }.map(_._2)
-    val device = DeviceDescriptor.useDefaultDevice
-
-    require(missingCols.isEmpty, s"Input columns ${missingCols.mkString(", ")} do not exist")
-
-    val model = CNTKModel.loadModelFromBytes(getModel, device)
+    require(missingCols.isEmpty, s"Input column(s) ${missingCols.mkString(", ")} do not exist")
 
     val setByName  = get(outputNodeNames)
     val setByIndex = get(outputNodeIndices)
