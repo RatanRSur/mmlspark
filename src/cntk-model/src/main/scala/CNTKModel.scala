@@ -314,12 +314,11 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel]
                                     getMiniBatchSize,
                                     getInputNodes,
                                     outputNodes))
-    setDefault(outputCols -> model.getOutputs.map(_.getName).toArray) // defaults to all CNTK model outputs
     if (setByName.isDefined && setByIndex.isDefined)
       throw new Exception("Must specify neither or only one of outputNodeName or outputNodeIndices")
-    val output = spark.createDataFrame(rdd, transformSchema(df.schema))
 
-    coercedCols.foldLeft(output)((_df, col) => _df.drop(col))
+    setDefault(outputCols -> model.getOutputs.map(_.getName).toArray) // defaults to all CNTK model outputs
+    spark.createDataFrame(rdd, transformSchema(df.schema)).drop(coercedCols:_*)
   }
 
 }
