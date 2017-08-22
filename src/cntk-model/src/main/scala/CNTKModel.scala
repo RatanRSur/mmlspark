@@ -297,8 +297,10 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel]
         val (optionUDF, inputInd) = optionUDFAndInputInd
         optionUDF match {
           case Some(coersionUDF) => {
-            val coercedCol = DatasetExtensions.findUnusedColumnName("coerced")(workDF.columns.toSet)
-            val coercedDF = workDF.withColumn(coercedCol, coersionUDF(col(workDF.columns(inputInd))))
+            val coercedCol =
+              DatasetExtensions.produceUnusedColumnName("coerced")(workDF.columns.toSet)
+            val coercedDF =
+              workDF.withColumn(coercedCol, coersionUDF(col(workDF.columns(inputInd))))
             (coercedDF, outputInds :+ workDF.columns.size, previouslyCoerced :+ coercedCol)
           }
           case None => (workDF, outputInds :+ inputIndices(outputInds.size), previouslyCoerced)

@@ -21,7 +21,7 @@ object DatasetExtensions {
       */
     def withDerivativeCol(prefix: String): String = {
       val columnNamesSet = mutable.HashSet(df.columns: _*)
-      findUnusedColumnName(prefix)(columnNamesSet)
+      produceUnusedColumnName(prefix)(columnNamesSet)
     }
 
     /** Gets the column values as the given type.
@@ -50,7 +50,7 @@ object DatasetExtensions {
     *
     * @return The unused column name.
     */
-  def findUnusedColumnName(prefix: String)(columnNames: Set[String]): String = {
+  def produceUnusedColumnName(prefix: String)(columnNames: Set[String]): String = {
     @tailrec def loop(counter: Int): String = {
       val unusedColumnName = s"${prefix}_$counter"
       if (columnNames.contains(unusedColumnName)) loop(counter + 1)
