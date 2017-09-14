@@ -66,22 +66,27 @@ private object CNTKModelUtils extends java.io.Serializable {
         if (outputBuffer.isEmpty) {
           var paddedRows = 0
 
-          for ((colInd, i) <- inputColInds.zipWithIndex) {
-            for (j <- 0 until minibatchSize) {
-              if (inputRows.hasNext) {
-                val row = inputRows.next()
-                inputBuffer += row
-                for ((x, k) <- row.getSeq[Float](colInd).view.zipWithIndex) {
-                  fvs(i)(j).set(k, x)
+          for (m <- 0 until minibatchSize) {
+            //println(s"inputRows.hasNext: ${inputRows.hasNext}")
+            if (inputRows.hasNext) {
+              val row = inputRows.next()
+              inputBuffer += row
+              for ((colInd, i) <- inputColInds.zipWithIndex) {
+                for ((x, j) <- row.getSeq[Float](colInd).view.zipWithIndex) {
+                  fvs(i)(m).set(j, x)
                 }
-              } else {
-                // TODO remove padding after CNTK bug is fixed
-                paddedRows += 1
-                for (k <- 0 until inputVectorSizes(i)) {
-                  fvs(i)(j).set(k, 0.0.toFloat)
-                }
+                inputFVVs(i).set(m, fvs(i)(m))
               }
-              inputFVVs(i).set(j, fvs(i)(j))
+            } else {
+              // TODO remove padding after CNTK bug is fixed
+              //println(s"paddedRows: ${paddedRows}")
+              paddedRows += 1
+              for ((colInd, i) <- inputColInds.zipWithIndex) {
+                for (j <- 0 until inputVectorSizes(i)) {
+                  fvs(i)(m).set(j, 0.0.toFloat)
+                }
+                inputFVVs(i).set(m, fvs(i)(m))
+              }
             }
           }
 
@@ -101,18 +106,25 @@ private object CNTKModelUtils extends java.io.Serializable {
           (outputVars zip outputFVVs).foreach {
             case (vari, vect) => outputDataMap.getitem(vari).copyVariableValueToFloat(vari, vect)
           }
+          //println(s"outputVars.size: ${outputVars.size}")
+          //println(s"outputFVVs.size: ${outputFVVs.size}")
+          //println(s"outputDataMap.size: ${outputDataMap.size}")
           assume(outputBuffer.isEmpty,
                  "The output row buffer was not empty when new elements were being added.")
           val outputSeqVecs = outputFVVs.map(fvv => toSeqSeq(fvv).dropRight(paddedRows)
                                                                  .map(fv => Vectors.dense(fv.map(_.toDouble).toArray)))
+          println(s"outputSeqVecs.size: ${outputSeqVecs.size}")
+          //println(s"minibatchSize: ${minibatchSize}")
+          //println(s"paddedRows: ${paddedRows}")
           val actualBatchSize = minibatchSize - paddedRows
+          //println(s"actualBatchSize: ${actualBatchSize}")
+          //outputSeqVecs.foreach(x => println(s"x: ${x.mkString(" ")}"))
           val unzippedBatches = for (i <- 0 until actualBatchSize) yield outputSeqVecs.map(_.apply(i))
+          //println(s"unzippedBatches.size: ${unzippedBatches.size}")
           outputBuffer ++= unzippedBatches.map(Row.fromSeq(_))
         }
-        val ret = Row.merge(inputBuffer.head, outputBuffer.head)
-        inputBuffer.remove(0)
-        outputBuffer.remove(0)
-        ret
+
+        Row.merge(inputBuffer.remove(0), outputBuffer.remove(0))
       }
     }
   }
@@ -248,7 +260,7 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel]
   }
 
   def transformSchema(schema: StructType): StructType =
-    getOutputCols.foldLeft(schema)((sch, col) => sch.add(StructField(col, VectorType)))
+    (schema /: getOutputCols)((sch, col) => sch.add(StructField(col, VectorType)))
 
   override def copy(extra: ParamMap): this.type = defaultCopy(extra)
 
@@ -257,18 +269,24 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel]
     * @return featurized dataset
     */
   def transform(dataset: Dataset[_]): DataFrame = {
-    val spark        = dataset.sparkSession
-    val sc           = spark.sparkContext
+    val spark = dataset.sparkSession
+    val sc    = spark.sparkContext
 
     val device = DeviceDescriptor.useDefaultDevice
-    val model = CNTKModel.loadModelFromBytes(getModel, device)
+    val model  = CNTKModel.loadModelFromBytes(getModel, device)
 
     setDefault(inputCols -> model.getArguments.map(_.getName).toArray)
     val inputIndices = getInputCols.map(dataset.columns.indexOf(_))
 
     val missingCols =
-      inputIndices.zip(getInputCols).filter { case (ind, col) => ind == -1 }.map(_._2)
+      (inputIndices zip getInputCols).filter { case (ind, col) => ind == -1 }.map(_._2)
     require(missingCols.isEmpty, s"Input column(s) ${missingCols.mkString(", ")} do not exist")
+
+    setDefault(inputNodes -> {
+      val namedInputIndices = getInputCols.map(model.getArguments.indexOf)
+      if (namedInputIndices.forall(_ != -1)) namedInputIndices
+      else                                   Array.range(0, getInputCols.size)
+    })
 
     val setByName  = get(outputNodeNames)
     val setByIndex = get(outputNodeIndices)
@@ -293,8 +311,8 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel]
     val (df, selectedIndices, coercedCols) = (coersionOptionUDFs zip inputIndices).foldLeft(
       (dataset.toDF, Array[Int](), Array[String]()))(
       (workDFAndOutputIndsAndPreviouslyCoerced, optionUDFAndInputInd) => {
-        val (workDF, outputInds, previouslyCoerced) = workDFAndOutputIndsAndPreviouslyCoerced
-        val (optionUDF, inputInd) = optionUDFAndInputInd
+        val (workDF,    outputInds, previouslyCoerced) = workDFAndOutputIndsAndPreviouslyCoerced
+        val (optionUDF, inputInd)                      = optionUDFAndInputInd
         optionUDF match {
           case Some(coersionUDF) => {
             val coercedCol =
@@ -306,10 +324,10 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel]
           case None => (workDF, outputInds :+ inputIndices(outputInds.size), previouslyCoerced)
         }
       })
+    df.show()
 
     val inputType           = df.schema($(inputCols).head).dataType
     val broadcastModelBytes = sc.broadcast(getModel)
-    setDefault(inputNodes -> Array.range(0, model.getArguments.size - 1))
     val rdd = df.rdd.mapPartitions(
       CNTKModelUtils.applyModelFunc(selectedIndices,
                                     broadcastModelBytes,

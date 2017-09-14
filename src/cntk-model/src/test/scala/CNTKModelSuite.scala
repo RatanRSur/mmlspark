@@ -150,14 +150,15 @@ class CNTKModelSuite extends LinuxOnly with CNTKTestUtils with RoundTripTestBase
     }
   }
 
-  test("supports multi out by default") {
+  test("supports multi in and multi out") {
     val model  = new CNTKModel().setModelLocation(session, modelPath)
-                                .setInputCol(inputCol)
+                                .setInputCols(Array(inputCol, labelCol))
     model.write.overwrite().save(saveFile)
     val modelLoaded = CNTKModel.load(saveFile)
     import images.sparkSession.implicits._
-    val result      = modelLoaded.transform(images.crossJoin(
-      Seq("airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck").toDF("labels")))
+    val oneHotEncodedLabels = Seq(Array(1.0) ++ Array.fill(9)(0.0)).toDF(labelCol)
+    val dfWithLabels = images.crossJoin(oneHotEncodedLabels)
+    val result = modelLoaded.transform(dfWithLabels)
     outputCols.map(colName => assert(result.columns.contains(colName)))
     result.show()
   }
