@@ -106,11 +106,9 @@ private object CNTKModelUtils extends java.io.Serializable {
           }
           assume(outputBuffer.isEmpty,
                  "The output row buffer was not empty when new elements were being added.")
-          val outputSeqVecs = outputFVVs.map(fvv => toSeqSeq(fvv).dropRight(paddedRows)
-                                                                 .map(fv => Vectors.dense(fv.map(_.toDouble).toArray)))
-          println(s"outputSeqVecs.size: ${outputSeqVecs.size}")
-          //println(s"minibatchSize: ${minibatchSize}")
-          //println(s"paddedRows: ${paddedRows}")
+          val outputSeqVecs = outputFVVs.map {
+            fvv => toSeqSeq(fvv).map(fv => Vectors.dense(fv.map(_.toDouble).toArray))
+          }
           val actualBatchSize = minibatchSize - paddedRows
           val unzippedBatches = for (i <- 0 until actualBatchSize) yield outputSeqVecs.map(x => x(i))
           outputBuffer ++= unzippedBatches.map(Row.fromSeq(_))
