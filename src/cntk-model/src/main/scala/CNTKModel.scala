@@ -67,7 +67,6 @@ private object CNTKModelUtils extends java.io.Serializable {
           var paddedRows = 0
 
           for (m <- 0 until minibatchSize) {
-            //println(s"inputRows.hasNext: ${inputRows.hasNext}")
             if (inputRows.hasNext) {
               val row = inputRows.next()
               inputBuffer += row
@@ -79,7 +78,6 @@ private object CNTKModelUtils extends java.io.Serializable {
               }
             } else {
               // TODO remove padding after CNTK bug is fixed
-              //println(s"paddedRows: ${paddedRows}")
               paddedRows += 1
               for ((colInd, i) <- inputColInds.zipWithIndex) {
                 for (j <- 0 until inputVectorSizes(i)) {
@@ -106,9 +104,6 @@ private object CNTKModelUtils extends java.io.Serializable {
           (outputVars zip outputFVVs).foreach {
             case (vari, vect) => outputDataMap.getitem(vari).copyVariableValueToFloat(vari, vect)
           }
-          //println(s"outputVars.size: ${outputVars.size}")
-          //println(s"outputFVVs.size: ${outputFVVs.size}")
-          //println(s"outputDataMap.size: ${outputDataMap.size}")
           assume(outputBuffer.isEmpty,
                  "The output row buffer was not empty when new elements were being added.")
           val outputSeqVecs = outputFVVs.map(fvv => toSeqSeq(fvv).dropRight(paddedRows)
@@ -117,10 +112,7 @@ private object CNTKModelUtils extends java.io.Serializable {
           //println(s"minibatchSize: ${minibatchSize}")
           //println(s"paddedRows: ${paddedRows}")
           val actualBatchSize = minibatchSize - paddedRows
-          //println(s"actualBatchSize: ${actualBatchSize}")
-          //outputSeqVecs.foreach(x => println(s"x: ${x.mkString(" ")}"))
-          val unzippedBatches = for (i <- 0 until actualBatchSize) yield outputSeqVecs.map(_.apply(i))
-          //println(s"unzippedBatches.size: ${unzippedBatches.size}")
+          val unzippedBatches = for (i <- 0 until actualBatchSize) yield outputSeqVecs.map(x => x(i))
           outputBuffer ++= unzippedBatches.map(Row.fromSeq(_))
         }
 
@@ -324,7 +316,6 @@ class CNTKModel(override val uid: String) extends Model[CNTKModel]
           case None => (workDF, outputInds :+ inputIndices(outputInds.size), previouslyCoerced)
         }
       })
-    df.show()
 
     val inputType           = df.schema($(inputCols).head).dataType
     val broadcastModelBytes = sc.broadcast(getModel)
