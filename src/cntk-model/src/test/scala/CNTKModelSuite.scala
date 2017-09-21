@@ -156,10 +156,10 @@ class CNTKModelSuite extends LinuxOnly with CNTKTestUtils with RoundTripTestBase
     model.write.overwrite().save(saveFile)
     val modelLoaded = CNTKModel.load(saveFile)
     import images.sparkSession.implicits._
-    val oneHotEncodedLabels = Seq(Array(1.0) ++ Array.fill(9)(0.0)).toDF(labelCol)
+    val oneHotEncodedLabels = Seq(1.0 +: Array.fill(9)(0.0)).toDF(labelCol)
     val dfWithLabels = images.crossJoin(oneHotEncodedLabels)
     val result = modelLoaded.transform(dfWithLabels)
-    outputCols.map(colName => assert(result.columns.contains(colName)))
+    outputCols.foreach(colName => assert(result.columns.contains(colName)))
     result.show()
   }
 
