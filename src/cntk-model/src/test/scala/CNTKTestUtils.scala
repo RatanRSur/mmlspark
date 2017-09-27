@@ -3,22 +3,26 @@
 
 package com.microsoft.ml.spark
 
+import java.util.Date
+
+import com.microsoft.ml.spark.FileUtilities.File
 import org.apache.spark.sql._
 import org.apache.spark.ml.linalg.DenseVector
 import com.microsoft.ml.spark.Readers.implicits._
+import org.apache.commons.io.FileUtils.getTempDirectoryPath
 
-trait CNTKTestUtils {
+trait CNTKTestUtils extends TestBase {
 
   val filesRoot = s"${sys.env("DATASETS_HOME")}/"
   val imagePath = s"$filesRoot/Images/CIFAR"
   val modelPath = s"$filesRoot/CNTKModel/ConvNet_CIFAR10.model"
-
   val inputCol  = "cntk_images"
   val outputCol = "out"
   val outputCols = Array("ce", "errs", "top5Errs", "z")
   val labelCol  = "labels"
 
   val featureVectorLength = 3 * 32 * 32
+  val saveFile = new File(tmpDir.toFile, "spark-z.model").toString
 
   def testModelDF(spark: SparkSession): DataFrame = {
     import spark.implicits._

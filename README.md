@@ -22,6 +22,7 @@ Python 3.5+.  See the API documentation
 * Easily ingest images from HDFS into Spark `DataFrame` ([example:301])
 * Pre-process image data using transforms from OpenCV ([example:302])
 * Featurize images using pre-trained deep neural nets using CNTK ([example:301])
+* Use pre-trained bidirectional LSTMs from Keras for medical entity extraction ([example:304])
 * Train DNN-based image classification models on N-Series GPU VMs on Azure
 * Featurize free-form text data using convenient APIs on top of primitives in
   SparkML via a single transformer ([example:201])
@@ -42,6 +43,8 @@ See our [notebooks](notebooks/samples/) for all examples.
   "CIFAR10 CNTK CNN Evaluation"
 [example:302]: notebooks/samples/302%20-%20Pipeline%20Image%20Transformations.ipynb
   "Pipeline Image Transformations"
+[example:304]: notebooks/samples/304%20-%20Medical%20Entity%20Extraction.ipynb
+  "Medical Entity Extraction"
 
 
 ## A short example
@@ -85,15 +88,11 @@ notebooks.  See the [documentation](docs/docker.md) for more on Docker use.
 MMLSpark can be conveniently installed on existing Spark clusters via the
 `--packages` option, examples:
 
-    spark-shell --packages com.microsoft.ml.spark:mmlspark_2.11:0.7 \
-                --repositories https://mmlspark.azureedge.net/maven
+    spark-shell --packages Azure:mmlspark:0.8
 
-    pyspark --packages com.microsoft.ml.spark:mmlspark_2.11:0.7 \
-            --repositories https://mmlspark.azureedge.net/maven
+    pyspark --packages Azure:mmlspark:0.8
 
-    spark-submit --packages com.microsoft.ml.spark:mmlspark_2.11:0.7 \
-                 --repositories https://mmlspark.azureedge.net/maven \
-                 MyApp.jar
+    spark-submit Azure:mmlspark:0.8 MyApp.jar
 
 <img title="Script action submission" src="http://i.imgur.com/oQcS0R2.png" align="right" />
 
@@ -106,7 +105,7 @@ script actions, see [this
 guide](https://docs.microsoft.com/en-us/azure/hdinsight/hdinsight-hadoop-customize-cluster-linux#use-a-script-action-during-cluster-creation).
 
 The script action url is:
-<https://mmlspark.azureedge.net/buildartifacts/0.7/install-mmlspark.sh>.
+<https://mmlspark.azureedge.net/buildartifacts/0.8/install-mmlspark.sh>.
 
 If you're using the Azure Portal to run the script action, go to `Script
 actions` → `Submit new` in the `Overview` section of your cluster blade.  In the
@@ -122,7 +121,7 @@ To install MMLSpark on the
 [library from Maven coordinates](https://docs.databricks.com/user-guide/libraries.html#libraries-from-maven-pypi-or-spark-packages)
 in your workspace.
 
-For the coordinates use: `com.microsoft.ml.spark:mmlspark:0.7`.  Then, under
+For the coordinates use: `com.microsoft.ml.spark:mmlspark:0.8`.  Then, under
 Advanced Options, use `https://mmlspark.azureedge.net/maven` for the repository.
 Ensure this library is attached to all clusters you create.
 
@@ -135,10 +134,10 @@ You can use MMLSpark in both your Scala and PySpark notebooks.
 If you are building a Spark application in Scala, add the following lines to
 your `build.sbt`:
 
-   ```scala
-   resolvers += "MMLSpark Repo" at "https://mmlspark.azureedge.net/maven"
-   libraryDependencies += "com.microsoft.ml.spark" %% "mmlspark" % "0.7"
-   ```
+    ```scala
+    resolvers += "MMLSpark Repo" at "https://mmlspark.azureedge.net/maven"
+    libraryDependencies += "com.microsoft.ml.spark" %% "mmlspark" % "0.8"
+    ```
 
 ### Building from source
 

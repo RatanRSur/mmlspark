@@ -3,23 +3,18 @@
 
 package com.microsoft.ml.spark
 
-import java.io.File
-import java.util.Date
-
-import org.apache.commons.io.FileUtils.getTempDirectoryPath
 import org.apache.spark.SparkException
 import org.apache.spark.ml.classification.LogisticRegression
-import org.apache.spark.ml.linalg.SQLDataTypes.VectorType
-import org.apache.spark.ml.{Pipeline, PipelineModel, PipelineStage}
 import org.apache.spark.ml.linalg.DenseVector
+import org.apache.spark.ml.linalg.SQLDataTypes.VectorType
 import org.apache.spark.ml.util.{MLReadable, MLWritable}
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.ml.{Pipeline, PipelineModel, PipelineStage}
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.{DataFrame, Row}
 
 class CNTKModelSuite extends LinuxOnly with CNTKTestUtils with RoundTripTestBase {
 
   // TODO: Move away from getTempDirectoryPath and have TestBase provide one
-  val saveFile = s"$getTempDirectoryPath/${new Date()}-spark-z.model"
 
   def testModel(minibatchSize: Int = 10): CNTKModel = {
     new CNTKModel()
@@ -29,7 +24,6 @@ class CNTKModelSuite extends LinuxOnly with CNTKTestUtils with RoundTripTestBase
       .setMiniBatchSize(minibatchSize)
       .setOutputNodeIndices(Array(3))
   }
-
   val images = testImages(session)
 
   private def checkParameters(minibatchSize: Int) = {
@@ -40,7 +34,6 @@ class CNTKModelSuite extends LinuxOnly with CNTKTestUtils with RoundTripTestBase
 
   test("A CNTK model should be able to support setting the input and output node") {
     val model = testModel().setInputNode(0)
-
     val data = makeFakeData(session, 3, featureVectorLength)
     val result = model.transform(data)
     assert(result.select(outputCol).count() == 3)
@@ -103,8 +96,6 @@ class CNTKModelSuite extends LinuxOnly with CNTKTestUtils with RoundTripTestBase
     val model = testModel()
     val result = model.transform(images.repartition(1))
     compareToTestModel(result)
-    //images.printSchema()
-    //result.show()
   }
 
   test("A CNTK model should work on an empty dataframe") {
@@ -160,12 +151,6 @@ class CNTKModelSuite extends LinuxOnly with CNTKTestUtils with RoundTripTestBase
     val dfWithLabels = images.crossJoin(oneHotEncodedLabels)
     val result = modelLoaded.transform(dfWithLabels)
     outputCols.foreach(colName => assert(result.columns.contains(colName)))
-    result.show()
-  }
-
-  override def afterAll(): Unit = {
-    new File(saveFile).delete()
-    super.afterAll()
   }
 
   val dfRoundTrip: DataFrame = images
